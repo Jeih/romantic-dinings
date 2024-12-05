@@ -1,6 +1,7 @@
+import { getCoordinates } from "@/app/utils/coordinatesCache";
 import { LoadScript } from "@react-google-maps/api";
 import dynamic from "next/dynamic";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Restaurant } from "../data/venues";
 
 // Add custom map style
@@ -80,65 +81,115 @@ interface MapProps {
     height: string;
     borderRadius: string;
   };
-  center: {
-    lat: number;
-    lng: number;
-  };
+  center: google.maps.LatLngLiteral;
   options: google.maps.MapOptions;
 }
 
-// Update the Map component with proper typing
 const Map = dynamic(
   () =>
     import("@react-google-maps/api").then((mod) => {
-      const { GoogleMap, Marker, Polyline } = mod;
+      const { GoogleMap, Marker, DirectionsRenderer } = mod;
       return function Map({
         activities,
         mapContainerStyle,
         center,
         options,
       }: MapProps) {
+        const [directions, setDirections] =
+          useState<google.maps.DirectionsResult | null>(null);
+        const [coordinates, setCoordinates] = useState<
+          Record<string, google.maps.LatLngLiteral>
+        >({});
+
+        // Fetch coordinates for all activities
+        useEffect(() => {
+          const fetchAllCoordinates = async () => {
+            const coords: Record<string, google.maps.LatLngLiteral> = {};
+            await Promise.all(
+              activities.map(async (activity) => {
+                coords[activity.placeId] = await getCoordinates(
+                  activity.placeId
+                );
+              })
+            );
+            setCoordinates(coords);
+          };
+
+          fetchAllCoordinates();
+        }, [activities]);
+
+        // Update directions when coordinates are available
+        useEffect(() => {
+          if (
+            activities.length >= 2 &&
+            Object.keys(coordinates).length === activities.length
+          ) {
+            const service = new google.maps.DirectionsService();
+            service.route(
+              {
+                origin: coordinates[activities[0].placeId],
+                destination:
+                  coordinates[activities[activities.length - 1].placeId],
+                waypoints: activities.slice(1, -1).map((activity) => ({
+                  location: coordinates[activity.placeId],
+                  stopover: true,
+                })),
+                travelMode: google.maps.TravelMode.DRIVING,
+              },
+              (
+                result: google.maps.DirectionsResult | null,
+                status: google.maps.DirectionsStatus
+              ) => {
+                if (status === "OK" && result) {
+                  setDirections(result);
+                }
+              }
+            );
+          } else {
+            setDirections(null);
+          }
+        }, [activities, coordinates]);
+
+        // Only render markers when we have coordinates
         return (
           <GoogleMap
             mapContainerStyle={mapContainerStyle}
             zoom={13}
-            center={center}
+            center={coordinates[activities[0]?.placeId] || center}
             options={options}
           >
-            {activities.map((activity, index) => (
-              <Marker
-                key={activity.id}
-                position={activity.coordinates}
-                icon={{
-                  path: "M-20,0a20,20 0 1,0 40,0a20,20 0 1,0 -40,0",
-                  fillColor: "#FF1493",
-                  fillOpacity: 1,
-                  strokeWeight: 2,
-                  strokeColor: "#FFFFFF",
-                  scale: 0.5,
-                  labelOrigin: new google.maps.Point(0, 0),
-                }}
-                label={{
-                  text: (index + 1).toString(),
-                  color: "#FFFFFF",
-                  fontSize: "14px",
-                  fontWeight: "bold",
+            {directions && (
+              <DirectionsRenderer
+                options={{
+                  directions: directions,
+                  suppressMarkers: true,
                 }}
               />
-            ))}
+            )}
 
-            <Polyline
-              path={activities.map((a) => ({
-                lat: a.coordinates.lat,
-                lng: a.coordinates.lng,
-              }))}
-              options={{
-                strokeColor: "#FF1493",
-                strokeOpacity: 0.6,
-                strokeWeight: 3,
-                geodesic: true,
-              }}
-            />
+            {activities.map((activity, index) =>
+              coordinates[activity.placeId] ? (
+                <Marker
+                  key={activity.id}
+                  position={coordinates[activity.placeId]}
+                  icon={{
+                    path: "M-20,0a20,20 0 1,0 40,0a20,20 0 1,0 -40,0",
+                    fillColor: "#FF1493",
+                    fillOpacity: 1,
+                    strokeWeight: 2,
+                    strokeColor: "#FFFFFF",
+                    scale: 0.5,
+                    labelOrigin: new google.maps.Point(0, 0),
+                  }}
+                  label={{
+                    text: (index + 1).toString(),
+                    color: "#FFFFFF",
+                    fontSize: "14px",
+                    fontWeight: "bold",
+                  }}
+                />
+              ) : null
+            )}
           </GoogleMap>
         );
       };
@@ -148,6 +199,22 @@ const Map = dynamic(
 
 const MapView = ({ activities }: { activities: Restaurant[] }) => {
   const [isLoaded, setIsLoaded] = useState(false);
+  const [defaultCenter, setDefaultCenter] = useState<google.maps.LatLngLiteral>(
+    {
+      lat: 40.4406,
+      lng: -79.9959,
+    }
+  );
+
+  useEffect(() => {
+    const fetchInitialCenter = async () => {
+      if (activities[0]) {
+        const coords = await getCoordinates(activities[0].placeId);
+        setDefaultCenter(coords);
+      }
+    };
+    fetchInitialCenter();
+  }, [activities]);
 
   const mapContainerStyle = {
     width: "100%",
@@ -161,11 +228,6 @@ const MapView = ({ activities }: { activities: Restaurant[] }) => {
     zoomControl: true,
     clickableIcons: false,
     backgroundColor: "#f8f8f8",
-  };
-
-  const center = activities[0]?.coordinates || {
-    lat: 40.7128,
-    lng: -74.006,
   };
 
   return (
@@ -182,7 +244,7 @@ const MapView = ({ activities }: { activities: Restaurant[] }) => {
         <Map
           activities={activities}
           mapContainerStyle={mapContainerStyle}
-          center={center}
+          center={defaultCenter}
           options={mapOptions}
         />
       </LoadScript>
