@@ -3,6 +3,7 @@ import { LoadScript } from "@react-google-maps/api";
 import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 import { Restaurant } from "../data/venues";
+import { env } from '@/app/config/env';
 
 // Add custom map style
 const mapStyles = [
@@ -89,7 +90,7 @@ const Map = dynamic(
   () =>
     import("@react-google-maps/api").then((mod) => {
       const { GoogleMap, Marker, DirectionsRenderer } = mod;
-      return function Map({
+      return function Map ({
         activities,
         mapContainerStyle,
         center,
@@ -238,7 +239,7 @@ const MapView = ({ activities }: { activities: Restaurant[] }) => {
         </div>
       )}
       <LoadScript
-        googleMapsApiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!}
+        googleMapsApiKey={env.client.googleMapsApiKey}
         onLoad={() => setIsLoaded(true)}
       >
         <Map
