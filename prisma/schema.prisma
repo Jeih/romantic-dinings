@@ -1,0 +1,30 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+
+model Place {
+  id          String    @id @default(cuid())
+  place_id    String    @unique // Google Places ID
+  name        String
+  type        PlaceType
+  vibes       String[]  // e.g., ["romantic", "cozy", "modern"]
+  price_level Int?      // Google's 0-4 scale
+  address     Json      // Full address components from Google
+  cuisine     String[]  // Types/categories from Google
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @updatedAt
+}
+
+enum PlaceType {
+  restaurant
+  bar
+  cafe
+  activity
+  attraction
+}
