@@ -30,3 +30,11 @@ enum PlaceType {
   activity
   attraction
 }
+
+model ItineraryShare {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  placeIds  String   // Comma-separated list of place_ids
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+}

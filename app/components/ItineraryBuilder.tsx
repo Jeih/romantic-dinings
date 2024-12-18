@@ -1,30 +1,47 @@
 "use client";
 
 import { GoogleAddress } from '@/app/types/google';
+import { createShareableCode } from "@/app/utils/itineraryShare";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Toaster } from '@/components/ui/toaster';
+import { useToast } from "@/hooks/use-toast";
 import { Place } from "@prisma/client";
-import { Clock } from "lucide-react";
+import { Clock, Share2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import MapView from "./MapView";
 import { PlaceCard } from "./itinerary/PlaceCard";
+import { ShareCodeInput } from "./itinerary/ShareCodeInput";
 import { VibeSelector } from "./itinerary/VibeSelector";
 
-const ItineraryBuilder = () => {
+interface ItineraryBuilderProps {
+  initialPlaceIds?: string[];
+}
+
+const ItineraryBuilder = ({ initialPlaceIds }: ItineraryBuilderProps) => {
+  const { toast } = useToast();
   const [places, setPlaces] = useState<Place[]>([]);
   const [draggedItem, setDraggedItem] = useState<Place | null>(null);
   const [travelDurations, setTravelDurations] = useState<Record<string, number>>({});
 
-  // Load initial places (optional, you can start with an empty itinerary)
+  // Load initial places from IDs
   useEffect(() => {
     const loadInitialPlaces = async () => {
-      const response = await fetch(`/api/places/rest_101`);
-      const restaurant = await response.json();
-      if (restaurant && !restaurant.error) {
-        setPlaces([restaurant]);
-      }
+      if (!initialPlaceIds?.length) return;
+
+      const loadedPlaces = await Promise.all(
+        initialPlaceIds.map(async (placeId) => {
+          const response = await fetch(`/api/places/${placeId}`);
+          const place = await response.json();
+          if (place.error) return null;
+          return place;
+        })
+      );
+
+      setPlaces(loadedPlaces.filter((p): p is Place => p !== null));
     };
+
     loadInitialPlaces();
-  }, []);
+  }, [initialPlaceIds]);
 
   // Add a new function to handle adding places to the itinerary
   const addPlaceToItinerary = (place: Place) => {
@@ -146,79 +163,142 @@ const ItineraryBuilder = () => {
     setPlaces(places.filter((place) => place.id !== id));
   };
 
+  const handleShare = async () => {
+    if (places.length === 0) return;
+
+    try {
+      const shareCode = await createShareableCode(places);
+      const shareUrl = `${window.location.origin}/?code=${shareCode}`;
+      await navigator.clipboard.writeText(shareUrl);
+
+      toast({
+        title: "Share link copied!",
+        description: `Anyone with this link can view your itinerary. Share code: ${shareCode}`,
+        duration: 3000,
+      });
+    } catch (error) {
+      console.error('Error sharing:', error);
+      toast({
+        title: "Failed to create share link",
+        variant: "destructive",
+        duration: 3000,
+      });
+    }
+  };
+
   return (
     <div className="container mx-auto">
       <div className="grid md:grid-cols-3 gap-6">
         {/* Itinerary Timeline */}
         <div className="md:col-span-2">
           <Card>
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>Your Romantic Evening</CardTitle>
+              <button
+                onClick={handleShare}
+                className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                title="Share itinerary"
+              >
+                <Share2 className="w-5 h-5" />
+              </button>
             </CardHeader>
             <CardContent>
+              {/* Add ShareCodeInput at the top */}
+              <div className="mb-6">
+                <ShareCodeInput />
+              </div>
+
               {/* Map View */}
               <div className="mb-6">
                 <MapView places={places} />
               </div>
 
               {/* Places List */}
-              {places.length === 0 ? (
-                <div className="text-center text-gray-500 py-8">
-                  Add places to your itinerary from the recommendations
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {places.map((place, index) => (
-                    <div key={place.id}>
-                      {/* Drop zone before first item */}
-                      {index === 0 && (
+              <div className="space-y-4">
+                {places.length === 0 ? (
+                  <div
+                    className="border-2 border-dashed border-gray-200 rounded-lg p-8 text-center"
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      e.currentTarget.style.borderColor = 'pink';
+                    }}
+                    onDragLeave={(e) => {
+                      e.currentTarget.style.borderColor = '#e5e7eb';
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      e.currentTarget.style.borderColor = '#e5e7eb';
+                      const placeData = e.dataTransfer.getData("place");
+                      if (placeData) {
+                        try {
+                          const newPlace = JSON.parse(placeData) as Place;
+                          if (!places.some(p => p.id === newPlace.id)) {
+                            setPlaces([newPlace]);
+                          }
+                        } catch (error) {
+                          console.error("Error processing dropped place:", error);
+                        }
+                      }
+                    }}
+                  >
+                    <p className="text-gray-500">
+                      Drag and drop places here to start building your itinerary
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {places.map((place, index) => (
+                      <div key={place.id}>
+                        {/* Drop zone before first item */}
+                        {index === 0 && (
+                          <div
+                            className="h-8 flex items-center justify-center"
+                            onDragOver={(e) => handleDragOver(e, 'before')}
+                            onDragLeave={handleDragLeave}
+                            onDrop={(e) => handleDrop(e, place, 'before')}
+                          >
+                            <div className="w-full h-2 rounded hover:bg-gray-100" />
+                          </div>
+                        )}
+
+                        {/* Show travel time from previous location */}
+                        {index > 0 && (
+                          <div className="flex items-center justify-center py-2 text-gray-500">
+                            <div className="flex items-center space-x-2">
+                              <div className="border-l-2 border-dashed border-gray-300 h-8" />
+                              <div className="flex items-center space-x-1 text-sm">
+                                <Clock className="w-3 h-3" />
+                                <span>
+                                  {travelDurations[`${places[index - 1].id}-${place.id}`] || 0} min travel
+                                </span>
+                              </div>
+                              <div className="border-l-2 border-dashed border-gray-300 h-8" />
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Place card */}
+                        <PlaceCard
+                          place={place}
+                          onDragStart={handleDragStart}
+                          onDragEnd={handleDragEnd}
+                          onRemove={removePlace}
+                        />
+
+                        {/* Drop zone after each item */}
                         <div
                           className="h-8 flex items-center justify-center"
-                          onDragOver={(e) => handleDragOver(e, 'before')}
+                          onDragOver={(e) => handleDragOver(e, 'after')}
                           onDragLeave={handleDragLeave}
-                          onDrop={(e) => handleDrop(e, place, 'before')}
+                          onDrop={(e) => handleDrop(e, place, 'after')}
                         >
                           <div className="w-full h-2 rounded hover:bg-gray-100" />
                         </div>
-                      )}
-
-                      {/* Show travel time from previous location */}
-                      {index > 0 && (
-                        <div className="flex items-center justify-center py-2 text-gray-500">
-                          <div className="flex items-center space-x-2">
-                            <div className="border-l-2 border-dashed border-gray-300 h-8" />
-                            <div className="flex items-center space-x-1 text-sm">
-                              <Clock className="w-3 h-3" />
-                              <span>
-                                {travelDurations[`${places[index - 1].id}-${place.id}`] || 0} min travel
-                              </span>
-                            </div>
-                            <div className="border-l-2 border-dashed border-gray-300 h-8" />
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Place card */}
-                      <PlaceCard
-                        place={place}
-                        onDragStart={handleDragStart}
-                        onDragEnd={handleDragEnd}
-                        onRemove={removePlace}
-                      />
-
-                      {/* Drop zone after each item */}
-                      <div
-                        className="h-8 flex items-center justify-center"
-                        onDragOver={(e) => handleDragOver(e, 'after')}
-                        onDragLeave={handleDragLeave}
-                        onDrop={(e) => handleDrop(e, place, 'after')}
-                      >
-                        <div className="w-full h-2 rounded hover:bg-gray-100" />
                       </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+                    ))}
+                  </div>
+                )}
+              </div>
             </CardContent>
           </Card>
         </div>
@@ -228,6 +308,7 @@ const ItineraryBuilder = () => {
           <VibeSelector onPlaceSelect={addPlaceToItinerary} />
         </div>
       </div>
+      <Toaster />
     </div>
   );
 };
