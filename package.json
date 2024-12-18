@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "postinstall": "prisma generate"
+    "postinstall": "bunx prisma generate"
   },
   "dependencies": {
     "@react-google-maps/api": "^2.20.3",
