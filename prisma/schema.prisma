@@ -9,16 +9,18 @@ generator client {
 
 
 model Place {
-  id          String    @id @default(cuid())
-  place_id    String    @unique // Google Places ID
-  name        String
-  type        PlaceType
-  vibes       String[]  // e.g., ["romantic", "cozy", "modern"]
-  price_level Int?      // Google's 0-4 scale
-  address     Json      // Full address components from Google
-  cuisine     String[]  // Types/categories from Google
-  created_at  DateTime  @default(now())
-  updated_at  DateTime  @updatedAt
+  id            String    @id @default(cuid())
+  place_id      String    @unique // Google Places ID
+  name          String
+  type          PlaceType
+  vibes         String[]
+  price_level   Int?      // Google's 0-4 scale
+  address       Json
+  cuisine       String[]
+  photo_url     String?
+  photo_ref     String?
+  created_at    DateTime  @default(now())
+  updated_at    DateTime  @updatedAt
 }
 
 enum PlaceType {

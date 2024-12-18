@@ -7,13 +7,15 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "postinstall": "bunx prisma generate"
+    "postinstall": "bunx prisma generate",
+    "update-coordinates": "bun scripts/updatePlaceCoordinates.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.1.0",
     "@react-google-maps/api": "^2.20.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "geist": "^1.3.1",
     "lucide-react": "^0.462.0",
     "next": "15.0.3",
     "prisma": "^6.1.0",

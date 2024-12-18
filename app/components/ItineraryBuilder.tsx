@@ -1,13 +1,13 @@
 "use client";
 
-import { GoogleAddress } from "@/app/types/google";
-import { getCoordinates } from "@/app/utils/coordinatesCache";
+import { GoogleAddress } from '@/app/types/google';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Place, PlaceType } from "@prisma/client";
-import { Clock, DollarSign, GripVertical, MapPin, Trash2 } from "lucide-react";
-import Image from "next/image";
+import { Place } from "@prisma/client";
+import { Clock } from "lucide-react";
 import { useEffect, useState } from "react";
 import MapView from "./MapView";
+import { PlaceCard } from "./itinerary/PlaceCard";
+import { VibeSelector } from "./itinerary/VibeSelector";
 
 const ItineraryBuilder = () => {
   const [places, setPlaces] = useState<Place[]>([]);
@@ -17,11 +17,10 @@ const ItineraryBuilder = () => {
   // Load initial places (optional, you can start with an empty itinerary)
   useEffect(() => {
     const loadInitialPlaces = async () => {
-      const response = await fetch(`/api/places?type=${PlaceType.restaurant}`);
-      const restaurants = await response.json();
-      // Take first restaurant as initial place (optional)
-      if (restaurants.length > 0) {
-        setPlaces([restaurants[0]]);
+      const response = await fetch(`/api/places/rest_101`);
+      const restaurant = await response.json();
+      if (restaurant && !restaurant.error) {
+        setPlaces([restaurant]);
       }
     };
     loadInitialPlaces();
@@ -41,8 +40,8 @@ const ItineraryBuilder = () => {
   // Calculate travel time function
   const calculateTravelTime = async (start: Place, end: Place): Promise<number> => {
     try {
-      const startCoords = await getCoordinates(start.place_id);
-      const endCoords = await getCoordinates(end.place_id);
+      const startCoords = (start.address as unknown as GoogleAddress).geometry!.location;
+      const endCoords = (end.address as unknown as GoogleAddress).geometry!.location;
 
       const response = await fetch(
         `/api/distance?` +
@@ -147,10 +146,6 @@ const ItineraryBuilder = () => {
     setPlaces(places.filter((place) => place.id !== id));
   };
 
-  const priceToSymbol = (level: number | null): string => {
-    return level ? "$".repeat(level) : "$$";
-  };
-
   return (
     <div className="container mx-auto">
       <div className="grid md:grid-cols-3 gap-6">
@@ -204,57 +199,12 @@ const ItineraryBuilder = () => {
                       )}
 
                       {/* Place card */}
-                      <div
-                        draggable
-                        onDragStart={(e) => handleDragStart(e, place)}
+                      <PlaceCard
+                        place={place}
+                        onDragStart={handleDragStart}
                         onDragEnd={handleDragEnd}
-                        className="p-4 border rounded-lg hover:shadow-md transition-shadow"
-                      >
-                        <div className="flex gap-4">
-                          <div className="flex items-center text-gray-400 cursor-move">
-                            <GripVertical className="w-4 h-4" />
-                          </div>
-
-                          <div className="flex-1">
-                            <div className="flex items-center justify-between mb-2">
-                              <h4 className="font-semibold text-lg">{place.name}</h4>
-                              <button
-                                onClick={() => removePlace(place.id)}
-                                className="p-1 hover:bg-gray-100 rounded text-red-500"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4">
-                              <Image
-                                src={`/api/places/${place.place_id}/photo?maxwidth=400`}
-                                alt={place.name}
-                                width={150}
-                                height={150}
-                                className="rounded object-cover w-[150px] h-[150px]"
-                                priority={false}
-                                loading="lazy"
-                                unoptimized
-                              />
-                              <div className="space-y-2">
-                                <div className="flex items-center text-gray-600">
-                                  <Clock className="w-4 h-4 mr-2" />
-                                  <span>{place.type === 'restaurant' ? '90 min' : '60 min'}</span>
-                                </div>
-                                <div className="flex items-center text-gray-600">
-                                  <MapPin className="w-4 h-4 mr-2" />
-                                  <span>{(place.address as unknown as GoogleAddress).formatted_address}</span>
-                                </div>
-                                <div className="flex items-center text-gray-600">
-                                  <DollarSign className="w-4 h-4 mr-2" />
-                                  <span>{priceToSymbol(place.price_level)}</span>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
+                        onRemove={removePlace}
+                      />
 
                       {/* Drop zone after each item */}
                       <div
@@ -278,161 +228,6 @@ const ItineraryBuilder = () => {
           <VibeSelector onPlaceSelect={addPlaceToItinerary} />
         </div>
       </div>
-    </div>
-  );
-};
-
-// Update VibeSelector to handle place selection
-const VibeSelector = ({ onPlaceSelect }: { onPlaceSelect: (place: Place) => void }) => {
-  const [selectedVibe, setSelectedVibe] = useState<string>("romantic");
-  const [restaurants, setRestaurants] = useState<Place[]>([]);
-  const [bars, setBars] = useState<Place[]>([]);
-
-  useEffect(() => {
-    const fetchPlaces = async () => {
-      const [restaurantResponse, barResponse] = await Promise.all([
-        fetch(`/api/places?type=${PlaceType.restaurant}`),
-        fetch(`/api/places?type=${PlaceType.bar}`)
-      ]);
-
-      const [fetchedRestaurants, fetchedBars] = await Promise.all([
-        restaurantResponse.json(),
-        barResponse.json()
-      ]);
-
-      setRestaurants(fetchedRestaurants);
-      setBars(fetchedBars);
-    };
-    fetchPlaces();
-  }, []);
-
-  const vibes = [
-    { name: "Romantic", color: "pink" },
-    { name: "Modern", color: "slate" },
-    { name: "Fun", color: "purple" },
-    { name: "Aesthetic", color: "rose" },
-    { name: "Cozy", color: "amber" },
-  ];
-
-  const filteredRestaurants = restaurants.filter((restaurant) =>
-    restaurant.vibes.includes(selectedVibe.toLowerCase())
-  );
-
-  const filteredBars = bars.filter((bar) =>
-    bar.vibes.includes(selectedVibe.toLowerCase())
-  );
-
-  const handleDragStart = (e: React.DragEvent<HTMLDivElement>, place: Place) => {
-    e.dataTransfer.setData("place", JSON.stringify(place));
-  };
-
-  const priceToSymbol = (level: number | null): string => {
-    return level ? "$".repeat(level) : "$$";
-  };
-
-  return (
-    <div className="space-y-6">
-      {/* Vibe Selector Bubbles */}
-      <div className="flex flex-wrap gap-2">
-        {vibes.map((vibe) => (
-          <button
-            key={vibe.name}
-            onClick={() => setSelectedVibe(vibe.name.toLowerCase())}
-            className={`px-4 py-2 rounded-full text-sm font-medium transition-all
-              ${selectedVibe === vibe.name.toLowerCase()
-                ? `bg-${vibe.color}-500 text-white`
-                : `bg-${vibe.color}-100 text-${vibe.color}-700 hover:bg-${vibe.color}-200`
-              }`}
-          >
-            {vibe.name}
-          </button>
-        ))}
-      </div>
-
-      {/* Recommendations */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Recommended Restaurants</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {filteredRestaurants.map((restaurant) => (
-            <div
-              key={restaurant.id}
-              draggable
-              onDragStart={(e) => handleDragStart(e, restaurant)}
-              onClick={() => onPlaceSelect(restaurant)}
-              className="p-4 border rounded-lg hover:shadow-md transition-shadow cursor-pointer"
-            >
-              <div className="flex gap-4">
-                <Image
-                  src={`/api/places/${restaurant.place_id}/photo?maxwidth=400`}
-                  alt={restaurant.name}
-                  width={150}
-                  height={150}
-                  className="rounded object-cover w-[150px] h-[150px]"
-                  priority={false}
-                  loading="lazy"
-                  unoptimized
-                />
-                <div>
-                  <h3 className="font-semibold">{restaurant.name}</h3>
-                  <p className="text-sm text-gray-600">{restaurant.cuisine[0]}</p>
-                  <p className="text-sm text-gray-500">
-                    {(restaurant.address as unknown as GoogleAddress).formatted_address}
-                  </p>
-                  <div className="flex items-center mt-2 text-sm">
-                    <span className="text-gray-600 mr-3">
-                      {priceToSymbol(restaurant.price_level)}
-                    </span>
-                    <span className="text-gray-600">90 min</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Recommended Bars</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {filteredBars.map((bar) => (
-            <div
-              key={bar.id}
-              draggable
-              onDragStart={(e) => handleDragStart(e, bar)}
-              onClick={() => onPlaceSelect(bar)}
-              className="p-4 border rounded-lg hover:shadow-md transition-shadow cursor-pointer"
-            >
-              <div className="flex gap-4">
-                <Image
-                  src={`/api/places/${bar.place_id}/photo?maxwidth=400`}
-                  alt={bar.name}
-                  width={150}
-                  height={150}
-                  className="rounded object-cover w-[150px] h-[150px]"
-                  priority={false}
-                  loading="lazy"
-                  unoptimized
-                />
-                <div>
-                  <h3 className="font-semibold">{bar.name}</h3>
-                  <p className="text-sm text-gray-600">{bar.cuisine[0]}</p>
-                  <p className="text-sm text-gray-500">
-                    {(bar.address as unknown as GoogleAddress).formatted_address}
-                  </p>
-                  <div className="flex items-center mt-2 text-sm">
-                    <span className="text-gray-600 mr-3">{priceToSymbol(bar.price_level)}</span>
-                    <span className="text-gray-600">60 min</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
     </div>
   );
 };

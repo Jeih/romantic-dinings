@@ -1,6 +1,4 @@
-import { Coordinates } from "./coordinatesCache";
-
-export async function getPlaceDetails(placeId: string) {
+export async function getPlaceDetails (placeId: string) {
   try {
     const response = await fetch(
       `/api/places/${placeId}`
@@ -13,7 +11,10 @@ export async function getPlaceDetails(placeId: string) {
   }
 }
 
-export async function calculateTravelTime(start: Coordinates, end: Coordinates) {
+export async function calculateTravelTime (
+  start: { lat: number; lng: number },
+  end: { lat: number; lng: number }
+) {
   try {
     const response = await fetch(
       `/api/distance?` +
@@ -28,7 +29,10 @@ export async function calculateTravelTime(start: Coordinates, end: Coordinates) 
   }
 }
 
-function fallbackCalculation(start: Coordinates, end: Coordinates): number {
+function fallbackCalculation (
+  start: { lat: number; lng: number },
+  end: { lat: number; lng: number }
+): number {
   return Math.round(
     Math.sqrt(
       Math.pow(end.lat - start.lat, 2) +
