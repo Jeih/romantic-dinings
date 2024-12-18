@@ -19,6 +19,7 @@ model Place {
   cuisine       String[]
   photo_url     String?
   photo_ref     String?
+  photo_updated DateTime?
   created_at    DateTime  @default(now())
   updated_at    DateTime  @updatedAt
 }
