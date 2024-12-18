@@ -1,42 +1,56 @@
 "use client";
 
-import {
-  Restaurant,
-  barOptions,
-  initialActivities,
-  restaurantOptions,
-} from "@/app/data/venues";
+import { GoogleAddress } from "@/app/types/google";
 import { getCoordinates } from "@/app/utils/coordinatesCache";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Place, PlaceType } from "@prisma/client";
 import { Clock, DollarSign, GripVertical, MapPin, Trash2 } from "lucide-react";
 import Image from "next/image";
 import { useEffect, useState } from "react";
 import MapView from "./MapView";
 
 const ItineraryBuilder = () => {
-  const [activities, setActivities] = useState<Restaurant[]>(initialActivities);
-  const [draggedItem, setDraggedItem] = useState<Restaurant | null>(null);
-  const [travelDurations, setTravelDurations] = useState<
-    Record<string, number>
-  >({});
+  const [places, setPlaces] = useState<Place[]>([]);
+  const [draggedItem, setDraggedItem] = useState<Place | null>(null);
+  const [travelDurations, setTravelDurations] = useState<Record<string, number>>({});
+
+  // Load initial places (optional, you can start with an empty itinerary)
+  useEffect(() => {
+    const loadInitialPlaces = async () => {
+      const response = await fetch(`/api/places?type=${PlaceType.restaurant}`);
+      const restaurants = await response.json();
+      // Take first restaurant as initial place (optional)
+      if (restaurants.length > 0) {
+        setPlaces([restaurants[0]]);
+      }
+    };
+    loadInitialPlaces();
+  }, []);
+
+  // Add a new function to handle adding places to the itinerary
+  const addPlaceToItinerary = (place: Place) => {
+    setPlaces(currentPlaces => {
+      // Check if place is already in itinerary
+      if (currentPlaces.some(p => p.id === place.id)) {
+        return currentPlaces; // Don't add duplicates
+      }
+      return [...currentPlaces, place];
+    });
+  };
 
   // Calculate travel time function
-  const calculateTravelTime = async (
-    start: Restaurant,
-    end: Restaurant
-  ): Promise<number> => {
+  const calculateTravelTime = async (start: Place, end: Place): Promise<number> => {
     try {
-      const startCoords = await getCoordinates(start.placeId);
-      const endCoords = await getCoordinates(end.placeId);
+      const startCoords = await getCoordinates(start.place_id);
+      const endCoords = await getCoordinates(end.place_id);
 
       const response = await fetch(
         `/api/distance?` +
-          `origin=${startCoords.lat},${startCoords.lng}&` +
-          `destination=${endCoords.lat},${endCoords.lng}`
+        `origin=${startCoords.lat},${startCoords.lng}&` +
+        `destination=${endCoords.lat},${endCoords.lng}`
       );
 
       const data = await response.json();
-      // Return raw duration in seconds
       return data.duration;
     } catch (error) {
       console.error("Error calculating travel time:", error);
@@ -47,28 +61,22 @@ const ItineraryBuilder = () => {
   useEffect(() => {
     const updateDurations = async () => {
       const durations: Record<string, number> = {};
-      for (let i = 0; i < activities.length - 1; i++) {
-        const key = `${activities[i].id}-${activities[i + 1].id}`;
-        const duration = await calculateTravelTime(
-          activities[i],
-          activities[i + 1]
-        );
+      for (let i = 0; i < places.length - 1; i++) {
+        const key = `${places[i].id}-${places[i + 1].id}`;
+        const duration = await calculateTravelTime(places[i], places[i + 1]);
         durations[key] = Math.ceil(duration / 60);
       }
       setTravelDurations(durations);
     };
 
-    if (activities.length >= 2) {
+    if (places.length >= 2) {
       updateDurations();
     }
-  }, [activities]);
+  }, [places]);
 
   // Update event handlers with proper types
-  const handleDragStart = (
-    e: React.DragEvent<HTMLDivElement>,
-    activity: Restaurant
-  ) => {
-    setDraggedItem(activity);
+  const handleDragStart = (e: React.DragEvent<HTMLDivElement>, place: Place) => {
+    setDraggedItem(place);
     e.currentTarget.style.opacity = "0.5";
   };
 
@@ -77,116 +85,70 @@ const ItineraryBuilder = () => {
     setDraggedItem(null);
   };
 
-  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>, position: 'before' | 'after') => {
     e.preventDefault();
-    e.currentTarget.style.borderTop = "2px solid pink";
+    if (position === 'before') {
+      e.currentTarget.style.borderTop = "2px solid pink";
+    } else {
+      e.currentTarget.style.borderBottom = "2px solid pink";
+    }
   };
 
   const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
     e.currentTarget.style.borderTop = "none";
+    e.currentTarget.style.borderBottom = "none";
   };
 
-  // Add the new handleActivityDrop function
-  const handleActivityDrop = async (
-    e: React.DragEvent<HTMLDivElement>,
-    targetActivity: Restaurant
-  ) => {
-    e.preventDefault();
-    const venueData = e.dataTransfer.getData("venue");
-    if (!venueData) return;
-
-    try {
-      const newVenue = JSON.parse(venueData) as Restaurant;
-      const newActivities = activities.map((activity) =>
-        activity.id === targetActivity.id
-          ? { ...newVenue, id: activity.id }
-          : activity
-      );
-
-      // Update times
-      for (let index = 0; index < newActivities.length; index++) {
-        const activity = newActivities[index];
-        if (index === 0) {
-          activity.time = "19:00";
-        } else {
-          const prevActivity = newActivities[index - 1];
-          const prevTime = new Date(`2024-01-01 ${prevActivity.time}`);
-          const travelTime = await calculateTravelTime(prevActivity, activity);
-          prevTime.setMinutes(
-            prevTime.getMinutes() +
-              prevActivity.duration +
-              Math.ceil(travelTime / 60)
-          );
-          activity.time = prevTime.toLocaleTimeString("en-US", {
-            hour: "2-digit",
-            minute: "2-digit",
-            hour12: false,
-          });
-        }
-      }
-
-      setActivities(newActivities);
-    } catch (error) {
-      console.error("Error processing dropped venue:", error);
-    }
-  };
-
-  // Update the existing handleDrop to use both functions
-  const handleDrop = async (
-    e: React.DragEvent<HTMLDivElement>,
-    targetActivity: Restaurant
-  ) => {
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>, targetPlace: Place, position: 'before' | 'after') => {
     e.preventDefault();
     e.currentTarget.style.borderTop = "none";
+    e.currentTarget.style.borderBottom = "none";
 
-    // First, try to handle venue drops
-    const venueData = e.dataTransfer.getData("venue");
-    if (venueData) {
-      handleActivityDrop(e, targetActivity);
+    // First, try to handle venue drops from recommendations
+    const placeData = e.dataTransfer.getData("place");
+    if (placeData) {
+      try {
+        const newPlace = JSON.parse(placeData) as Place;
+        // Don't add if already exists
+        if (places.some(p => p.id === newPlace.id)) {
+          return;
+        }
+
+        const targetIndex = places.findIndex(p => p.id === targetPlace.id);
+        const insertIndex = position === 'after' ? targetIndex + 1 : targetIndex;
+
+        const newPlaces = [...places];
+        newPlaces.splice(insertIndex, 0, newPlace);
+        setPlaces(newPlaces);
+      } catch (error) {
+        console.error("Error processing dropped place:", error);
+      }
       return;
     }
 
-    // If no venue data, handle reordering
-    if (!draggedItem || draggedItem === targetActivity) return;
+    // Handle reordering existing places
+    if (!draggedItem || draggedItem.id === targetPlace.id) return;
 
-    const newActivities = [...activities];
-    const draggedIndex = activities.findIndex(
-      (item) => item.id === draggedItem.id
-    );
-    const targetIndex = activities.findIndex(
-      (item) => item.id === targetActivity.id
-    );
+    const newPlaces = [...places];
+    const draggedIndex = places.findIndex(p => p.id === draggedItem.id);
+    let targetIndex = places.findIndex(p => p.id === targetPlace.id);
 
-    newActivities.splice(draggedIndex, 1);
-    newActivities.splice(targetIndex, 0, draggedItem);
-
-    // Update times
-    for (let index = 0; index < newActivities.length; index++) {
-      const activity = newActivities[index];
-      if (index === 0) {
-        activity.time = "19:00";
-      } else {
-        const prevActivity = newActivities[index - 1];
-        const prevTime = new Date(`2024-01-01 ${prevActivity.time}`);
-        const travelTime = await calculateTravelTime(prevActivity, activity);
-        prevTime.setMinutes(
-          prevTime.getMinutes() +
-            prevActivity.duration +
-            Math.ceil(travelTime / 60)
-        );
-        activity.time = prevTime.toLocaleTimeString("en-US", {
-          hour: "2-digit",
-          minute: "2-digit",
-          hour12: false,
-        });
-      }
+    if (position === 'after') {
+      targetIndex += 1;
     }
 
-    setActivities(newActivities);
+    newPlaces.splice(draggedIndex, 1);
+    newPlaces.splice(targetIndex, 0, draggedItem);
+
+    setPlaces(newPlaces);
   };
 
-  const removeActivity = (id: number) => {
-    setActivities(activities.filter((activity) => activity.id !== id));
+  const removePlace = (id: string) => {
+    setPlaces(places.filter((place) => place.id !== id));
+  };
+
+  const priceToSymbol = (level: number | null): string => {
+    return level ? "$".repeat(level) : "$$";
   };
 
   return (
@@ -201,114 +163,148 @@ const ItineraryBuilder = () => {
             <CardContent>
               {/* Map View */}
               <div className="mb-6">
-                <MapView activities={activities} />
+                <MapView places={places} />
               </div>
 
-              {/* Activities List */}
-              <div className="space-y-4">
-                {activities.map((activity, index) => (
-                  <div key={activity.id}>
-                    {/* Show travel time from previous location if not first item */}
-                    {index > 0 && (
-                      <div className="flex items-center justify-center py-2 text-gray-500">
-                        <div className="flex items-center space-x-2">
-                          {/* Dotted line */}
-                          <div className="border-l-2 border-dashed border-gray-300 h-8" />
-                          {/* Travel time */}
-                          <div className="flex items-center space-x-1 text-sm">
-                            <Clock className="w-3 h-3" />
-                            <span>
-                              {travelDurations[
-                                `${activities[index - 1].id}-${activity.id}`
-                              ] || 0}{" "}
-                              min travel
-                            </span>
+              {/* Places List */}
+              {places.length === 0 ? (
+                <div className="text-center text-gray-500 py-8">
+                  Add places to your itinerary from the recommendations
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {places.map((place, index) => (
+                    <div key={place.id}>
+                      {/* Drop zone before first item */}
+                      {index === 0 && (
+                        <div
+                          className="h-8 flex items-center justify-center"
+                          onDragOver={(e) => handleDragOver(e, 'before')}
+                          onDragLeave={handleDragLeave}
+                          onDrop={(e) => handleDrop(e, place, 'before')}
+                        >
+                          <div className="w-full h-2 rounded hover:bg-gray-100" />
+                        </div>
+                      )}
+
+                      {/* Show travel time from previous location */}
+                      {index > 0 && (
+                        <div className="flex items-center justify-center py-2 text-gray-500">
+                          <div className="flex items-center space-x-2">
+                            <div className="border-l-2 border-dashed border-gray-300 h-8" />
+                            <div className="flex items-center space-x-1 text-sm">
+                              <Clock className="w-3 h-3" />
+                              <span>
+                                {travelDurations[`${places[index - 1].id}-${place.id}`] || 0} min travel
+                              </span>
+                            </div>
+                            <div className="border-l-2 border-dashed border-gray-300 h-8" />
                           </div>
-                          <div className="border-l-2 border-dashed border-gray-300 h-8" />
                         </div>
-                      </div>
-                    )}
+                      )}
 
-                    {/* Existing activity card */}
-                    <div
-                      draggable
-                      onDragStart={(e) => handleDragStart(e, activity)}
-                      onDragEnd={handleDragEnd}
-                      onDragOver={(e) => handleDragOver(e)}
-                      onDragLeave={(e) => handleDragLeave(e)}
-                      onDrop={(e) => handleDrop(e, activity)}
-                      className="p-4 border rounded-lg hover:shadow-md transition-shadow"
-                    >
-                      <div className="flex gap-4">
-                        {/* Drag Handle */}
-                        <div className="flex items-center text-gray-400 cursor-move">
-                          <GripVertical className="w-4 h-4" />
-                        </div>
-
-                        {/* Activity content */}
-                        <div className="flex-1">
-                          <div className="flex items-center justify-between mb-2">
-                            <h4 className="font-semibold text-lg">
-                              {activity.name}
-                            </h4>
-                            <button
-                              onClick={() => removeActivity(activity.id)}
-                              className="p-1 hover:bg-gray-100 rounded text-red-500"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
+                      {/* Place card */}
+                      <div
+                        draggable
+                        onDragStart={(e) => handleDragStart(e, place)}
+                        onDragEnd={handleDragEnd}
+                        className="p-4 border rounded-lg hover:shadow-md transition-shadow"
+                      >
+                        <div className="flex gap-4">
+                          <div className="flex items-center text-gray-400 cursor-move">
+                            <GripVertical className="w-4 h-4" />
                           </div>
 
-                          <div className="grid grid-cols-2 gap-4">
-                            <Image
-                              src={`/api/places/${activity.placeId}/photo?maxwidth=400`}
-                              alt={activity.name}
-                              width={150}
-                              height={150}
-                              className="rounded object-cover w-[150px] h-[150px]"
-                              priority={false}
-                              loading="lazy"
-                              unoptimized
-                            />
-                            <div className="space-y-2">
-                              <div className="flex items-center text-gray-600">
-                                <Clock className="w-4 h-4 mr-2" />
-                                <span>
-                                  {activity.time} ({activity.duration} min)
-                                </span>
-                              </div>
-                              <div className="flex items-center text-gray-600">
-                                <MapPin className="w-4 h-4 mr-2" />
-                                <span>{activity.address}</span>
-                              </div>
-                              <div className="flex items-center text-gray-600">
-                                <DollarSign className="w-4 h-4 mr-2" />
-                                <span>{activity.price}</span>
+                          <div className="flex-1">
+                            <div className="flex items-center justify-between mb-2">
+                              <h4 className="font-semibold text-lg">{place.name}</h4>
+                              <button
+                                onClick={() => removePlace(place.id)}
+                                className="p-1 hover:bg-gray-100 rounded text-red-500"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                              <Image
+                                src={`/api/places/${place.place_id}/photo?maxwidth=400`}
+                                alt={place.name}
+                                width={150}
+                                height={150}
+                                className="rounded object-cover w-[150px] h-[150px]"
+                                priority={false}
+                                loading="lazy"
+                                unoptimized
+                              />
+                              <div className="space-y-2">
+                                <div className="flex items-center text-gray-600">
+                                  <Clock className="w-4 h-4 mr-2" />
+                                  <span>{place.type === 'restaurant' ? '90 min' : '60 min'}</span>
+                                </div>
+                                <div className="flex items-center text-gray-600">
+                                  <MapPin className="w-4 h-4 mr-2" />
+                                  <span>{(place.address as unknown as GoogleAddress).formatted_address}</span>
+                                </div>
+                                <div className="flex items-center text-gray-600">
+                                  <DollarSign className="w-4 h-4 mr-2" />
+                                  <span>{priceToSymbol(place.price_level)}</span>
+                                </div>
                               </div>
                             </div>
                           </div>
                         </div>
                       </div>
+
+                      {/* Drop zone after each item */}
+                      <div
+                        className="h-8 flex items-center justify-center"
+                        onDragOver={(e) => handleDragOver(e, 'after')}
+                        onDragLeave={handleDragLeave}
+                        onDrop={(e) => handleDrop(e, place, 'after')}
+                      >
+                        <div className="w-full h-2 rounded hover:bg-gray-100" />
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
 
         {/* Vibe Selector and Recommendations */}
         <div className="md:col-span-1">
-          <VibeSelector />
+          <VibeSelector onPlaceSelect={addPlaceToItinerary} />
         </div>
       </div>
     </div>
   );
 };
 
-// Move VibeSelector to a separate component
-const VibeSelector = () => {
+// Update VibeSelector to handle place selection
+const VibeSelector = ({ onPlaceSelect }: { onPlaceSelect: (place: Place) => void }) => {
   const [selectedVibe, setSelectedVibe] = useState<string>("romantic");
+  const [restaurants, setRestaurants] = useState<Place[]>([]);
+  const [bars, setBars] = useState<Place[]>([]);
+
+  useEffect(() => {
+    const fetchPlaces = async () => {
+      const [restaurantResponse, barResponse] = await Promise.all([
+        fetch(`/api/places?type=${PlaceType.restaurant}`),
+        fetch(`/api/places?type=${PlaceType.bar}`)
+      ]);
+
+      const [fetchedRestaurants, fetchedBars] = await Promise.all([
+        restaurantResponse.json(),
+        barResponse.json()
+      ]);
+
+      setRestaurants(fetchedRestaurants);
+      setBars(fetchedBars);
+    };
+    fetchPlaces();
+  }, []);
 
   const vibes = [
     { name: "Romantic", color: "pink" },
@@ -318,19 +314,20 @@ const VibeSelector = () => {
     { name: "Cozy", color: "amber" },
   ];
 
-  const filteredRestaurants = restaurantOptions.filter((restaurant) =>
+  const filteredRestaurants = restaurants.filter((restaurant) =>
     restaurant.vibes.includes(selectedVibe.toLowerCase())
   );
 
-  const filteredBars = barOptions.filter((bar) =>
+  const filteredBars = bars.filter((bar) =>
     bar.vibes.includes(selectedVibe.toLowerCase())
   );
 
-  const handleDragStart = (
-    e: React.DragEvent<HTMLDivElement>,
-    venue: Restaurant
-  ) => {
-    e.dataTransfer.setData("venue", JSON.stringify(venue));
+  const handleDragStart = (e: React.DragEvent<HTMLDivElement>, place: Place) => {
+    e.dataTransfer.setData("place", JSON.stringify(place));
+  };
+
+  const priceToSymbol = (level: number | null): string => {
+    return level ? "$".repeat(level) : "$$";
   };
 
   return (
@@ -342,10 +339,9 @@ const VibeSelector = () => {
             key={vibe.name}
             onClick={() => setSelectedVibe(vibe.name.toLowerCase())}
             className={`px-4 py-2 rounded-full text-sm font-medium transition-all
-              ${
-                selectedVibe === vibe.name.toLowerCase()
-                  ? `bg-${vibe.color}-500 text-white`
-                  : `bg-${vibe.color}-100 text-${vibe.color}-700 hover:bg-${vibe.color}-200`
+              ${selectedVibe === vibe.name.toLowerCase()
+                ? `bg-${vibe.color}-500 text-white`
+                : `bg-${vibe.color}-100 text-${vibe.color}-700 hover:bg-${vibe.color}-200`
               }`}
           >
             {vibe.name}
@@ -364,11 +360,12 @@ const VibeSelector = () => {
               key={restaurant.id}
               draggable
               onDragStart={(e) => handleDragStart(e, restaurant)}
-              className="p-4 border rounded-lg hover:shadow-md transition-shadow cursor-move"
+              onClick={() => onPlaceSelect(restaurant)}
+              className="p-4 border rounded-lg hover:shadow-md transition-shadow cursor-pointer"
             >
               <div className="flex gap-4">
                 <Image
-                  src={`/api/places/${restaurant.placeId}/photo?maxwidth=400`}
+                  src={`/api/places/${restaurant.place_id}/photo?maxwidth=400`}
                   alt={restaurant.name}
                   width={150}
                   height={150}
@@ -379,15 +376,15 @@ const VibeSelector = () => {
                 />
                 <div>
                   <h3 className="font-semibold">{restaurant.name}</h3>
-                  <p className="text-sm text-gray-600">{restaurant.cuisine}</p>
-                  <p className="text-sm text-gray-500">{restaurant.address}</p>
+                  <p className="text-sm text-gray-600">{restaurant.cuisine[0]}</p>
+                  <p className="text-sm text-gray-500">
+                    {(restaurant.address as unknown as GoogleAddress).formatted_address}
+                  </p>
                   <div className="flex items-center mt-2 text-sm">
                     <span className="text-gray-600 mr-3">
-                      {restaurant.price}
+                      {priceToSymbol(restaurant.price_level)}
                     </span>
-                    <span className="text-gray-600">
-                      {restaurant.duration} min
-                    </span>
+                    <span className="text-gray-600">90 min</span>
                   </div>
                 </div>
               </div>
@@ -396,7 +393,6 @@ const VibeSelector = () => {
         </CardContent>
       </Card>
 
-      {/* Similar card for bars */}
       <Card>
         <CardHeader>
           <CardTitle>Recommended Bars</CardTitle>
@@ -407,11 +403,12 @@ const VibeSelector = () => {
               key={bar.id}
               draggable
               onDragStart={(e) => handleDragStart(e, bar)}
-              className="p-4 border rounded-lg hover:shadow-md transition-shadow cursor-move"
+              onClick={() => onPlaceSelect(bar)}
+              className="p-4 border rounded-lg hover:shadow-md transition-shadow cursor-pointer"
             >
               <div className="flex gap-4">
                 <Image
-                  src={`/api/places/${bar.placeId}/photo?maxwidth=400`}
+                  src={`/api/places/${bar.place_id}/photo?maxwidth=400`}
                   alt={bar.name}
                   width={150}
                   height={150}
@@ -422,11 +419,13 @@ const VibeSelector = () => {
                 />
                 <div>
                   <h3 className="font-semibold">{bar.name}</h3>
-                  <p className="text-sm text-gray-600">{bar.cuisine}</p>
-                  <p className="text-sm text-gray-500">{bar.address}</p>
+                  <p className="text-sm text-gray-600">{bar.cuisine[0]}</p>
+                  <p className="text-sm text-gray-500">
+                    {(bar.address as unknown as GoogleAddress).formatted_address}
+                  </p>
                   <div className="flex items-center mt-2 text-sm">
-                    <span className="text-gray-600 mr-3">{bar.price}</span>
-                    <span className="text-gray-600">{bar.duration} min</span>
+                    <span className="text-gray-600 mr-3">{priceToSymbol(bar.price_level)}</span>
+                    <span className="text-gray-600">60 min</span>
                   </div>
                 </div>
               </div>

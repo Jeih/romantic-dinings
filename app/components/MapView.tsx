@@ -1,8 +1,9 @@
+import { env } from '@/app/config/env';
 import { getCoordinates } from "@/app/utils/coordinatesCache";
+import { Place } from '@prisma/client';
 import { LoadScript } from "@react-google-maps/api";
 import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
-import { Restaurant } from "../data/venues";
 
 // Add custom map style
 const mapStyles = [
@@ -73,9 +74,8 @@ const mapStyles = [
   },
 ];
 
-// Add interface for Map component props
 interface MapProps {
-  activities: Restaurant[];
+  places: Place[];
   mapContainerStyle: {
     width: string;
     height: string;
@@ -89,8 +89,8 @@ const Map = dynamic(
   () =>
     import("@react-google-maps/api").then((mod) => {
       const { GoogleMap, Marker, DirectionsRenderer } = mod;
-      return function Map({
-        activities,
+      return function Map ({
+        places,
         mapContainerStyle,
         center,
         options,
@@ -101,14 +101,14 @@ const Map = dynamic(
           Record<string, google.maps.LatLngLiteral>
         >({});
 
-        // Fetch coordinates for all activities
+        // Fetch coordinates for all places
         useEffect(() => {
           const fetchAllCoordinates = async () => {
             const coords: Record<string, google.maps.LatLngLiteral> = {};
             await Promise.all(
-              activities.map(async (activity) => {
-                coords[activity.placeId] = await getCoordinates(
-                  activity.placeId
+              places.map(async (place) => {
+                coords[place.place_id] = await getCoordinates(
+                  place.place_id
                 );
               })
             );
@@ -116,22 +116,22 @@ const Map = dynamic(
           };
 
           fetchAllCoordinates();
-        }, [activities]);
+        }, [places]);
 
         // Update directions when coordinates are available
         useEffect(() => {
           if (
-            activities.length >= 2 &&
-            Object.keys(coordinates).length === activities.length
+            places.length >= 2 &&
+            Object.keys(coordinates).length === places.length
           ) {
             const service = new google.maps.DirectionsService();
             service.route(
               {
-                origin: coordinates[activities[0].placeId],
+                origin: coordinates[places[0].place_id],
                 destination:
-                  coordinates[activities[activities.length - 1].placeId],
-                waypoints: activities.slice(1, -1).map((activity) => ({
-                  location: coordinates[activity.placeId],
+                  coordinates[places[places.length - 1].place_id],
+                waypoints: places.slice(1, -1).map((place) => ({
+                  location: coordinates[place.place_id],
                   stopover: true,
                 })),
                 travelMode: google.maps.TravelMode.DRIVING,
@@ -148,14 +148,14 @@ const Map = dynamic(
           } else {
             setDirections(null);
           }
-        }, [activities, coordinates]);
+        }, [places, coordinates]);
 
         // Only render markers when we have coordinates
         return (
           <GoogleMap
             mapContainerStyle={mapContainerStyle}
             zoom={13}
-            center={coordinates[activities[0]?.placeId] || center}
+            center={coordinates[places[0]?.place_id] || center}
             options={options}
           >
             {directions && (
@@ -167,14 +167,14 @@ const Map = dynamic(
               />
             )}
 
-            {activities.map((activity, index) =>
-              coordinates[activity.placeId] ? (
+            {places.map((place, index) =>
+              coordinates[place.place_id] ? (
                 <Marker
-                  key={activity.id}
-                  position={coordinates[activity.placeId]}
+                  key={place.id}
+                  position={coordinates[place.place_id]}
                   icon={{
                     path: "M-20,0a20,20 0 1,0 40,0a20,20 0 1,0 -40,0",
-                    fillColor: "#FF1493",
+                    fillColor: place.type === 'restaurant' ? "#FF1493" : "#4169E1",
                     fillOpacity: 1,
                     strokeWeight: 2,
                     strokeColor: "#FFFFFF",
@@ -197,7 +197,7 @@ const Map = dynamic(
   { ssr: false }
 );
 
-const MapView = ({ activities }: { activities: Restaurant[] }) => {
+const MapView = ({ places }: { places: Place[] }) => {
   const [isLoaded, setIsLoaded] = useState(false);
   const [defaultCenter, setDefaultCenter] = useState<google.maps.LatLngLiteral>(
     {
@@ -208,13 +208,13 @@ const MapView = ({ activities }: { activities: Restaurant[] }) => {
 
   useEffect(() => {
     const fetchInitialCenter = async () => {
-      if (activities[0]) {
-        const coords = await getCoordinates(activities[0].placeId);
+      if (places[0]) {
+        const coords = await getCoordinates(places[0].place_id);
         setDefaultCenter(coords);
       }
     };
     fetchInitialCenter();
-  }, [activities]);
+  }, [places]);
 
   const mapContainerStyle = {
     width: "100%",
@@ -238,11 +238,11 @@ const MapView = ({ activities }: { activities: Restaurant[] }) => {
         </div>
       )}
       <LoadScript
-        googleMapsApiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!}
+        googleMapsApiKey={env.client.googleMapsApiKey}
         onLoad={() => setIsLoaded(true)}
       >
         <Map
-          activities={activities}
+          places={places}
           mapContainerStyle={mapContainerStyle}
           center={defaultCenter}
           options={mapOptions}

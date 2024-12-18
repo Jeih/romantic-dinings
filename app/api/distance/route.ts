@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
+import { env } from '@/app/config/env';
 
-export async function GET(request: NextRequest) {
+export async function GET (request: NextRequest) {
   const origin = request.nextUrl.searchParams.get('origin');
   const destination = request.nextUrl.searchParams.get('destination');
 
@@ -20,7 +21,7 @@ export async function GET(request: NextRequest) {
       `units=imperial&` +
       `departure_time=now&` +
       `traffic_model=best_guess&` +
-      `key=${process.env.GOOGLE_MAPS_API_KEY}`
+      `key=${env.server.googleMapsApiKey}`
     );
 
     if (!response.ok) {
@@ -28,12 +29,12 @@ export async function GET(request: NextRequest) {
     }
 
     const data = await response.json();
-    
+
     if (!data.rows?.[0]?.elements?.[0]?.duration?.value) {
       console.error('Invalid Distance Matrix API response:', JSON.stringify(data, null, 2));
       return Response.json(
         { duration: 900 },
-        { 
+        {
           status: 200,
           headers: {
             'Warning': 'Using fallback values due to invalid API response'
