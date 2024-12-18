@@ -17,7 +17,6 @@ model Place {
   price_level   Int?      // Google's 0-4 scale
   address       Json
   cuisine       String[]
-  photo_url     String?
   photo_ref     String?
   photo_updated DateTime?
   created_at    DateTime  @default(now())

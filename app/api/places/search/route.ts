@@ -79,18 +79,14 @@ export async function GET (request: NextRequest) {
 
         if (existingPlace) {
           // Update photo if stale
-          if (!existingPlace.photo_ref || !existingPlace.photo_url || isPhotoStale(existingPlace.photo_updated)) {
+          if (!existingPlace.photo_ref || isPhotoStale(existingPlace.photo_updated)) {
             const details = await fetchPlaceDetails(result.place_id, 'photos');
             const photoRef = details.result?.photos?.[0]?.photo_reference;
-            const photoUrl = photoRef
-              ? `/api/places/${result.place_id}/photo?maxwidth=400`
-              : `https://ui-avatars.com/api/?name=${encodeURIComponent(result.name)}&background=random&size=400&bold=true&length=2`;
 
             return prisma.place.update({
               where: { place_id: result.place_id },
               data: {
                 photo_ref: photoRef,
-                photo_url: photoUrl,
                 photo_updated: new Date()
               }
             });
@@ -106,11 +102,6 @@ export async function GET (request: NextRequest) {
 
         // Get photo reference if available
         const photoRef = details.result?.photos?.[0]?.photo_reference;
-
-        // Generate photo URL
-        const photoUrl = photoRef
-          ? `/api/places/${result.place_id}/photo?maxwidth=400`
-          : `https://ui-avatars.com/api/?name=${encodeURIComponent(result.name)}&background=random&size=400&bold=true&length=2`;
 
         // Determine place type
         const type = result.types.includes('bar') ? PlaceType.bar : PlaceType.restaurant;
@@ -132,7 +123,6 @@ export async function GET (request: NextRequest) {
             cuisine: result.types.filter((t: string) =>
               !['restaurant', 'bar', 'food', 'point_of_interest', 'establishment'].includes(t)
             ),
-            photo_url: photoUrl,
             photo_ref: photoRef || null,
             photo_updated: new Date()
           }

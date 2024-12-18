@@ -53,9 +53,6 @@ export async function GET (
           !['restaurant', 'bar', 'food', 'point_of_interest', 'establishment'].includes(t)
         ),
         photo_ref: data.result.photos?.[0]?.photo_reference || null,
-        photo_url: data.result.photos?.[0]?.photo_reference
-          ? `/api/places/${id}/photo?maxwidth=400`
-          : null,
         photo_updated: new Date()
       }
     });
