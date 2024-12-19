@@ -1,5 +1,4 @@
 import { env } from '@/app/config/env';
-import { GoogleAddress } from '@/app/types/google';
 import { Place } from '@prisma/client';
 import { LoadScript } from "@react-google-maps/api";
 import dynamic from "next/dynamic";
@@ -104,10 +103,10 @@ const Map = dynamic(
             const service = new google.maps.DirectionsService();
             service.route(
               {
-                origin: (places[0].address as unknown as GoogleAddress).geometry!.location,
-                destination: (places[places.length - 1].address as unknown as GoogleAddress).geometry!.location,
+                origin: { lat: places[0].latitude, lng: places[0].longitude },
+                destination: { lat: places[places.length - 1].latitude, lng: places[places.length - 1].longitude },
                 waypoints: places.slice(1, -1).map((place) => ({
-                  location: (place.address as unknown as GoogleAddress).geometry!.location,
+                  location: { lat: place.latitude, lng: place.longitude },
                   stopover: true,
                 })),
                 travelMode: google.maps.TravelMode.DRIVING,
@@ -130,7 +129,7 @@ const Map = dynamic(
           <GoogleMap
             mapContainerStyle={mapContainerStyle}
             zoom={13}
-            center={(places[0]?.address as unknown as GoogleAddress)?.geometry?.location || center}
+            center={places[0] ? { lat: places[0].latitude, lng: places[0].longitude } : center}
             options={options}
           >
             {directions && (
@@ -145,7 +144,7 @@ const Map = dynamic(
             {places.map((place, index) => (
               <Marker
                 key={place.id}
-                position={(place.address as unknown as GoogleAddress).geometry!.location}
+                position={{ lat: place.latitude, lng: place.longitude }}
                 icon={{
                   path: "M-20,0a20,20 0 1,0 40,0a20,20 0 1,0 -40,0",
                   fillColor: place.type === 'restaurant' ? "#FF1493" : "#4169E1",

@@ -1,5 +1,4 @@
 import { useDebounce } from "@/app/hooks/useDebounce";
-import { GoogleAddress } from "@/app/types/google";
 import { Place } from "@prisma/client";
 import { Search } from "lucide-react";
 import { useState } from "react";
@@ -63,7 +62,7 @@ export const PlaceSearch = ({ onPlaceSelect }: PlaceSearchProps) => {
             >
               <div className="font-medium">{place.name}</div>
               <div className="text-sm text-gray-500">
-                {(place.address as unknown as GoogleAddress).formatted_address}
+                {place.address}
               </div>
             </div>
           ))}

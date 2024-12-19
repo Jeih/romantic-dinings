@@ -43,12 +43,9 @@ export async function GET (
         type: data.result.types.includes('bar') ? 'bar' : 'restaurant',
         vibes: [],
         price_level: data.result.price_level || null,
-        address: {
-          formatted_address: data.result.formatted_address,
-          geometry: {
-            location: data.result.geometry.location
-          }
-        },
+        address: data.result.formatted_address,
+        latitude: data.result.geometry.location.lat,
+        longitude: data.result.geometry.location.lng,
         cuisine: data.result.types.filter((t: string) =>
           !['restaurant', 'bar', 'food', 'point_of_interest', 'establishment'].includes(t)
         ),

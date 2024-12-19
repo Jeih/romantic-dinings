@@ -1,6 +1,5 @@
 "use client";
 
-import { GoogleAddress } from '@/app/types/google';
 import { createShareableCode } from "@/app/utils/itineraryShare";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Toaster } from '@/components/ui/toaster';
@@ -57,8 +56,8 @@ const ItineraryBuilder = ({ initialPlaceIds }: ItineraryBuilderProps) => {
   // Calculate travel time function
   const calculateTravelTime = async (start: Place, end: Place): Promise<number> => {
     try {
-      const startCoords = (start.address as unknown as GoogleAddress).geometry!.location;
-      const endCoords = (end.address as unknown as GoogleAddress).geometry!.location;
+      const startCoords = { lat: start.latitude, lng: start.longitude };
+      const endCoords = { lat: end.latitude, lng: end.longitude };
 
       const response = await fetch(
         `/api/distance?` +

@@ -15,7 +15,9 @@ model Place {
   type          PlaceType
   vibes         String[]
   price_level   Int?      // Google's 0-4 scale
-  address       Json
+  address       String
+  latitude      Float
+  longitude     Float
   cuisine       String[]
   photo_ref     String?
   photo_updated DateTime?

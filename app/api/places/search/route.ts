@@ -114,12 +114,9 @@ export async function GET (request: NextRequest) {
             type: type,
             vibes: [],
             price_level: result.price_level || null,
-            address: {
-              formatted_address: result.formatted_address,
-              geometry: {
-                location: result.geometry.location
-              }
-            },
+            address: result.formatted_address,
+            latitude: result.geometry.location.lat,
+            longitude: result.geometry.location.lng,
             cuisine: result.types.filter((t: string) =>
               !['restaurant', 'bar', 'food', 'point_of_interest', 'establishment'].includes(t)
             ),

@@ -1,4 +1,3 @@
-import { GoogleAddress } from "@/app/types/google";
 import { Place, PlaceType } from "@prisma/client";
 import { Clock, DollarSign, GripVertical, MapPin, Trash2 } from "lucide-react";
 import Image from "next/image";
@@ -63,7 +62,7 @@ export const PlaceCard = ({ place, onDragStart, onDragEnd, onRemove }: PlaceCard
               </div>
               <div className="flex items-center text-gray-600">
                 <MapPin className="w-4 h-4 mr-2" />
-                <span>{(place.address as unknown as GoogleAddress).formatted_address}</span>
+                <span>{place.address}</span>
               </div>
               <div className="flex items-center text-gray-600">
                 <DollarSign className="w-4 h-4 mr-2" />

@@ -1,4 +1,3 @@
-import { GoogleAddress } from "@/app/types/google";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Place, PlaceType } from "@prisma/client";
 import Image from "next/image";
@@ -121,7 +120,7 @@ export const VibeSelector = ({ onPlaceSelect }: VibeSelectorProps) => {
                   <h3 className="font-semibold">{restaurant.name}</h3>
                   <p className="text-sm text-gray-600">{restaurant.cuisine[0]}</p>
                   <p className="text-sm text-gray-500">
-                    {(restaurant.address as unknown as GoogleAddress).formatted_address}
+                    {restaurant.address}
                   </p>
                   <div className="flex items-center mt-2 text-sm">
                     <span className="text-gray-600 mr-3">
@@ -164,7 +163,7 @@ export const VibeSelector = ({ onPlaceSelect }: VibeSelectorProps) => {
                   <h3 className="font-semibold">{bar.name}</h3>
                   <p className="text-sm text-gray-600">{bar.cuisine[0]}</p>
                   <p className="text-sm text-gray-500">
-                    {(bar.address as unknown as GoogleAddress).formatted_address}
+                    {bar.address}
                   </p>
                   <div className="flex items-center mt-2 text-sm">
                     <span className="text-gray-600 mr-3">{priceToSymbol(bar.price_level)}</span>
